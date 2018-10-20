@@ -24,7 +24,7 @@ We use clang tool to collect the class inheritance relationship, so we need conf
 
 ### CMake
 
-For CMake, there is a config CMAKE_EXPORT_COMPILE_COMMANDS to generate the compilation database
+For CMake, there is a config CMAKE_EXPORT_COMPILE_COMMANDS=ON to generate the compilation database
 
 ### Others
 
