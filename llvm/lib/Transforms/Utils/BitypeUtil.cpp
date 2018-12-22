@@ -1641,7 +1641,7 @@ namespace llvm{
                     //Value *arraySizeAddr = Builder.CreateIntToPtr(Builder.CreateSub(second, Constant8), IntptrTyN);
                     Value *Param[5] = {ObjAddrT, ObjAddr, TypeSize, ArraySize, AllocTypeV};
                     Builder.CreateCall(initFunction, Param);
-
+                    
                     //erase the array size
                     if(currentIndex == elementSize){
                         Function *initFunction = (Function *)SrcM->getOrInsertFunction("__bitype_direct_eraseArraySize", VoidTy, IntptrTyN);

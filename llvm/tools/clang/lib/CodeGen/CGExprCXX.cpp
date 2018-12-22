@@ -586,7 +586,7 @@ CodeGenFunction::BitypeEmitObjTraceInst(const CXXRecordDecl *ClassDecl, llvm::Va
     Args.push_back(EmitCheckValue(ValueAddr));
     ArgTypes.push_back(CGM.IntPtrTy);
     Args.push_back(EmitCheckValue(classIndex));
-    ArgTypes.push_back(CGM.Int32Ty);
+    ArgTypes.push_back(CGM.Int64Ty);
     Args.push_back(EmitCheckValue(Offset));
     ArgTypes.push_back(CGM.Int64Ty);
 
