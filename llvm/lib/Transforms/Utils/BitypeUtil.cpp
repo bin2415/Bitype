@@ -1576,7 +1576,8 @@ namespace llvm{
 
                     if(isFirstEntry){
                         //Value *arraySizeAddr = Builder.CreateIntToPtr(Builder.CreateSub(second, Constant8), IntptrTyN);
-                        Value *Param[2] = {ObjAddr, ArraySize};
+                        Value* tempAddr = Builder.CreatePtrToInt(ObjAddr, IntptrTyN);
+                        Value *Param[2] = {tempAddr, ArraySize};
                         Function *updateArraySizeFunc = (Function *)SrcM->getOrInsertFunction("__bitype_update_arraySize", VoidTy, IntptrTyN, Int32Ty);
                         Builder.CreateCall(updateArraySizeFunc, Param);
                     }
@@ -1639,13 +1640,15 @@ namespace llvm{
                     Function *initFunction = (Function *)SrcM->getOrInsertFunction("__bitype_eraseObj", VoidTy, IntptrTyN, IntptrTyN, Int32Ty,
                                                                                 Int64Ty, Int32Ty);
                     //Value *arraySizeAddr = Builder.CreateIntToPtr(Builder.CreateSub(second, Constant8), IntptrTyN);
-                    Value *Param[5] = {ObjAddrT, ObjAddr, TypeSize, ArraySize, AllocTypeV};
+                    Value* tempAddr = Builder.CreatePtrToInt(ObjAddr, IntptrTyN);
+                    Value *Param[5] = {ObjAddrT, tempAddr, TypeSize, ArraySize, AllocTypeV};
                     Builder.CreateCall(initFunction, Param);
                     
                     //erase the array size
                     if(currentIndex == elementSize){
+                        //Value* tempAddr = Builder.CreatePtrToInt(ObjAddr, IntptrTyN);
                         Function *initFunction = (Function *)SrcM->getOrInsertFunction("__bitype_direct_eraseArraySize", VoidTy, IntptrTyN);
-                        Value *Param[1] = {ObjAddr};
+                        Value *Param[1] = {tempAddr};
                         Builder.CreateCall(initFunction, Param);
                     }
 
