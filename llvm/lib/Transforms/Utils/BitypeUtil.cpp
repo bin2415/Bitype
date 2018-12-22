@@ -93,9 +93,9 @@ namespace llvm{
         std::ifstream ifile;
         ifile.open(ClCodeMapFile, std::ios::in);
 
-        assert(ifile.is_open()& 
-        "Please configure the class code number informatin file path with -mllvm -bitype-codemap=<file-path>"
-        );
+        // assert(ifile.is_open()& 
+        // "Please configure the class code number informatin file path with -mllvm -bitype-codemap=<file-path>"
+        // );
 
         // MemoryBuffer *MB = FileOrErr.get().get();
         // SmallVector<StringRef, 16> lines;
@@ -133,9 +133,9 @@ namespace llvm{
         //llvm::ErrorOr<std::unique_ptr<MemoryBuffer>> FileOrErr = MemoryBuffer::getFile(ClCastRelatedFile);
         std::ifstream ifile;
         ifile.open(ClCastRelatedFile, std::ios::in);
-        assert(ifile.is_open() & 
-        "Please configure the cast related class informatin file path with -mllvm -bitype-castrelated=<file-path>"
-        );
+        // assert(ifile.is_open() & 
+        // "Please configure the cast related class informatin file path with -mllvm -bitype-castrelated=<file-path>"
+        // );
 
         // MemoryBuffer *MB = FileOrErr.get().get();
         // SmallVector<StringRef, 16> lines;
@@ -430,9 +430,9 @@ namespace llvm{
         //llvm::ErrorOr<std::unique_ptr<MemoryBuffer>> FileOrErr = MemoryBuffer::getFile(ClInheritanceFile);
         std::ifstream ifile;
         ifile.open(ClInheritanceFile, std::ios::in);
-        assert(ifstream.is_open() & 
-         "Please configure the cast related class informatin file path with -mllvm -bitype-inheritance=<file-path>"
-        );
+        // assert(ifile.is_open() & 
+        //  "Please configure the cast related class informatin file path with -mllvm -bitype-inheritance=<file-path>"
+        // );
 
         //std::string ParseError;
         // MemoryBuffer *MB = FileOrErr.get().get();
@@ -480,9 +480,9 @@ namespace llvm{
         //llvm::ErrorOr<std::unique_ptr<MemoryBuffer>> FileOrErr = MemoryBuffer::getFile(ClInheritanceFile);
         std::ifstream ifile;
         ifile.open(ClInheritanceAllFile, std::ios::in);
-        assert(ifstream.is_open() & 
-         "Please configure the cast related class informatin file path with -mllvm -bitype-inheritance=<file-path>"
-        );
+        // assert(ifile.is_open() & 
+        //  "Please configure the cast related class informatin file path with -mllvm -bitype-inheritance=<file-path>"
+        // );
 
         //std::string ParseError;
         // MemoryBuffer *MB = FileOrErr.get().get();
