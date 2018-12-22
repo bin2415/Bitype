@@ -27,6 +27,9 @@
 #define allCount 8
 #define confusionSum 9
 
+//#define BITYPE_LOG
+#define PRINT_BAD_CASTING
+
 void InstallAtExitHandler();
 __attribute__ ((visibility ("default"))) void ***BitypeLookupStart;
 __attribute__ ((visibility ("default"))) void **BitypeSecondLevelEnd;

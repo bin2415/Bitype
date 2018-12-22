@@ -14,9 +14,12 @@ using namespace std;
 #define BT_BUF_SIZE 100
 #define PRINT_BAD_CASTING
 
+typedef struct size_offset{
+    uint32_t size;
+    int32_t offset;
+} size_offset;
+
 static unsigned int BitypePageNum = 10;
-//static void **BitypeSecondLevelEnd = NULL;
-//static void **BitypeSecondLevelStart = NULL;
 
 static size_t mmap_size = L2_BITS * sizeof(void*) * BitypePageNum * 2;
 static size_t added_memory_size = L2_BITS * BitypePageNum * 2;
@@ -75,7 +78,7 @@ extern "C"{
 
     SANITIZER_INTERFACE_ATTRIBUTE
     void __bitype_update_arraySize(void *thisPtr, uint32_t ArraySize){
-            // because in ptmalloc, the address -8 is the malloc size, so we can use it to imply the arraysize
+        if(thisPtr == NULL) return;
         unsigned long arraySizeAddr = (unsigned long)thisPtr;
         unsigned long idx11 = arraySizeAddr >> L2_NUM & L1_MASK;
         void **level22 = BitypeLookupStart[idx11];
@@ -97,12 +100,14 @@ extern "C"{
         }
         idx22 = idx22 << 1;
         idx22 += 1;
-        level22[idx22] = (void *)ArraySize;
+        size_offset* tmp_soff = (size_offset*)&(level22[idx22]);
+        tmp_soff->size = ArraySize;
+        //level22[idx22] = (void *)ArraySize;
         return;
     }
 
     SANITIZER_INTERFACE_ATTRIBUTE
-    void __bitype_direct_updateObjTrace(void *thisPtr, void* referenceAddr){
+    void __bitype_direct_updateObjTrace(void *thisPtr, void* referenceAddr, const int offset){
     //printf("update\n");
     unsigned long addressTmp = (unsigned long)thisPtr;
     unsigned long idx1 = (unsigned long)addressTmp >> L2_NUM & L1_MASK;
@@ -130,7 +135,9 @@ extern "C"{
     }
 
     level2[idx2] = referenceAddr;
-    level2[idx22] = NULL;
+    size_offset* tmp_soff = (size_offset*)&(level2[idx22]);
+    tmp_soff->size = 0;
+    tmp_soff->offset = offset;
     return;
 }
 
@@ -145,7 +152,7 @@ extern "C"{
     }
 
     SANITIZER_INTERFACE_ATTRIBUTE
-    void __bitype_updateObjTrace(void *thisPtr, void *referenceAddr, uint32_t TypeSize, uint32_t ArraySize){
+    void __bitype_updateObjTrace(void *thisPtr, void *referenceAddr, uint32_t TypeSize, uint32_t ArraySize, uint32_t offset){
         //printf("update\n");
         for(uint32_t i = 0; i < ArraySize; i++){
             unsigned long addr = ((unsigned long)thisPtr + (TypeSize * i));
@@ -169,60 +176,137 @@ extern "C"{
                 BitypeSecondLevelStart += L2_BITS * 2;
             }
             level2[idx2] = referenceAddr;
-            level2[idx22] = NULL;
+            size_offset* tmp_soff = (size_offset*)&(level2[idx22]);
+            tmp_soff->size = 0;
+            tmp_soff->offset = offset;
         }
         return;
     }
 } // extern C
 
+__attribute__((always_inline))
+inline static void print_confusion_inline(int debug){
+        if(debug < 0){
+
+            #ifdef BITYPE_LOG
+            IncVal(lookupwrong, 1);
+            #endif
+
+            #ifdef PRINT_BAD_CASTING
+            printTypeConfusion(debug);
+            #endif
+
+        }else{
+            if(!debugArray[debug]){
+                debugArray[debug] = true;
+
+                #ifdef PRINT_BAD_CASTING
+                printTypeConfusion(debug);
+                #endif
+
+                #ifdef BITYPE_LOG
+                IncVal(lookupwrong, 1);
+                #endif
+            }
+        
+        }
+}
 
 //TODO add source information
 __attribute__((always_inline))
 inline static void* bitype_verify_cast(void *sourcePtr, void *thisPtr, unsigned index, unsigned char code, int debugIndex){
     //printf("Hello, I am on the bitype verify cast\n");
-    IncVal(allCount, 1);
+    //IncVal(allCount, 1);
     if(sourcePtr == NULL) return nullptr;
     //printf("code is %u\n", code);
     index += 2;
-    IncVal(lookupsum, 1);
 
-    unsigned long idx1 = (unsigned long)thisPtr >> L2_NUM & L1_MASK;
+    #ifdef BITYPE_LOG
+    IncVal(lookupsum, 1);
+    #endif
+
+    // lookup the entry begin
+    unsigned long idx1 = (unsigned long)sourcePtr >> L2_NUM & L1_MASK;
     void **level2 = BitypeLookupStart[idx1];
     if(level2 == NULL){
         //printf("miss it\n");
+
+        #ifdef BITYPE_LOG
         IncVal(lookupmiss, 1);
-        return thisPtr;
+        #endif
+
+        return sourcePtr;
+        
     }
-    unsigned idx2 = (unsigned long)thisPtr >> 3 & L2_MASK;
+    unsigned idx2 = (unsigned long)sourcePtr >> 3 & L2_MASK;
     idx2 = idx2 << 1;
     void *referenceAddr = level2[idx2];
     if(referenceAddr == NULL){
         //printf("miss it\n");
+
+        #ifdef BITYPE_LOG
         IncVal(lookupmiss, 1);
-        return thisPtr;   
+        #endif
+
+        return sourcePtr;   
+    }
+    // lookup the entry end
+
+    if(sourcePtr != thisPtr){
+        unsigned idx22 = idx2 + 1;
+        //int OffsetTmp = ((size_offset)(level2[idx22])).offset;
+        size_offset* tmp_soff = (size_offset*)&(level2[idx22]);
+        int OffsetTmp = tmp_soff->offset;
+        if(OffsetTmp == -1)
+            OffsetTmp = 0;
+
+        long offset = ((char *)thisPtr - ((char *)sourcePtr - OffsetTmp));
+
+        if(offset < 0){
+        print_confusion_inline(debugIndex);
+        
+        #ifdef BITYPE_LOG
+        IncVal(confusionSum, 1);
+        #endif
+
+            return nullptr;
+        }
+
+        idx1 = (unsigned long)thisPtr >> L2_NUM & L1_MASK;
+        level2 = BitypeLookupStart[idx1];
+        if(level2 == NULL){
+        print_confusion_inline(debugIndex);
+            
+            #ifdef BITYPE_LOG
+            IncVal(confusionSum, 1);
+            #endif
+
+            return nullptr;
+        }
+        idx2 = (unsigned long)thisPtr >> 3 & L2_MASK;
+        idx2 = idx2 << 1;
+        referenceAddr = level2[idx2];
+        if(referenceAddr == NULL){
+        print_confusion_inline(debugIndex);
+
+            #ifdef BITYPE_LOG
+            IncVal(confusionSum, 1);
+            #endif
+
+            return nullptr;   
+        }
     }
     //cout << "Reference Addr is " << referenceAddr << endl;
     unsigned char * arr = (unsigned char *)referenceAddr;
     unsigned char tempChar = arr[index];
-    unsigned short *tempArr = (unsigned short *)referenceAddr;
-    //printf("tempChar is %u\n", tempChar);
-    //unsigned char debugChar = tempChar ^ code;
-    //printf("debug char is %u\n", debugChar); 
     if((tempChar^code) > tempChar){
-        //printTypeConfusion();
-        if(debugIndex < 0){
-            IncVal(lookupwrong, 1);
-            printf("typeconfusion class index is %u\n", (unsigned short)tempArr[0]);
-            printTypeConfusion(debugIndex);
-        }else{
-            if(!debugArray[debugIndex]){
-                debugArray[debugIndex] = true;
-                printf("typeconfusion class index is %u\n", (unsigned short)tempArr[0]);
-                printTypeConfusion(debugIndex);
-                IncVal(lookupwrong, 1);
-            }
-        }
+
+        print_confusion_inline(debugIndex);
+
+        #ifdef BITYPE_LOG
         IncVal(confusionSum, 1);
+        #endif
+
         return nullptr;        
     }
     //printf("Got it\n");
@@ -238,12 +322,16 @@ void __bitype_direct_eraseObj(void *thisPtr){
     idx2 = idx2 << 1;
     void **level2 = BitypeLookupStart[idx1];
     if(level2 != NULL)
-        level2[idx2] = NULL;
+        {
+            level2[idx2] = NULL;
+            level2[idx2+1] = NULL;
+        }
     return;
     }
 
 SANITIZER_INTERFACE_ATTRIBUTE
 void __bitype_direct_eraseArraySize(void *thisPtr){
+    if(thisPtr == NULL) return;
     unsigned long idx1 = (unsigned long)thisPtr >> L2_NUM & L1_MASK;
     unsigned long idx2 = (unsigned long)thisPtr >> 3 & L2_MASK;
     idx2 = idx2 << 1;
@@ -273,8 +361,9 @@ void __bitype_eraseObj(void *thisPtr, void *objAddr, const uint32_t TypeSize, un
         
         idx2 = idx2 << 1;
         idx2 += 1;
-        void *sized = level2[idx2];
-        if(sized && (unsigned long)sized != REINTERPRET_MAGIC){
+        size_offset* tmp_soff = (size_offset*)&(level2[idx2]);
+        uint32_t sized = tmp_soff->size;
+        if(sized){
                 ArraySize = (unsigned long)sized;
         }
         else
@@ -310,17 +399,35 @@ void* __bitype_dynamic_cast_verification(void *thisPtr, unsigned index, unsigned
 }
 
 SANITIZER_INTERFACE_ATTRIBUTE
-void __bitype_print_type_confusion(int debugIndex){
-    if(debugIndex < 0){
-        //printTypeConfusion(debugIndex);
-    }else if(!debugArray[debugIndex]){
-        //printTypeConfusion(debugIndex);
-        debugArray[debugIndex] = true;
+void __bitype_print_type_confusion(int debug){
+     if(debug < 0){
+
+            #ifdef BITYPE_LOG
+            IncVal(lookupwrong, 1);
+            #endif
+
+            #ifdef PRINT_BAD_CASTING
+            printTypeConfusion(debug);
+            #endif
+
+        }else{
+            if(!debugArray[debug]){
+                debugArray[debug] = true;
+
+                #ifdef PRINT_BAD_CASTING
+                printTypeConfusion(debug);
+                #endif
+
+                #ifdef BITYPE_LOG
+                IncVal(lookupwrong, 1);
+                #endif
+            }
+        
         }
 }
 
 SANITIZER_INTERFACE_ATTRIBUTE
-void __bitype_handle_reinterpret_cast(void *thisPtr, void* referenceAddr){
+void __bitype_handle_reinterpret_cast(void *thisPtr, void* referenceAddr, const int offset){
     unsigned long addressTmp = (unsigned long)thisPtr;
     unsigned long idx1 = (unsigned long)addressTmp >> L2_NUM & L1_MASK;
     void **level2 = BitypeLookupStart[idx1];
@@ -347,12 +454,15 @@ void __bitype_handle_reinterpret_cast(void *thisPtr, void* referenceAddr){
 
     unsigned long idx22 = idx2 + 1;
     if(level2[idx2]){
-        if(level2[idx22] == NULL || (unsigned long)level2[idx22] != REINTERPRET_MAGIC)
-            return;
+       size_offset* tmp_soff = (size_offset*)&(level2[idx22]);
+       if(tmp_soff->offset != -1)
+        return;
     }        
     
     level2[idx2] = referenceAddr;
-    level2[idx22] = (void *) REINTERPRET_MAGIC;
+    size_offset* tmp_soff = (size_offset*)&(level2[idx22]);
+    tmp_soff->size = 0;
+    tmp_soff->offset = -1;
     return;
 }
 
@@ -400,7 +510,11 @@ static void printResult(){
 
 
 static void BitypeAtExit(void) {
+
+  #ifdef BITYPE_LOG
   printResult();
+  #endif
+
 }
 
 void InstallAtExitHandler() {

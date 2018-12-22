@@ -218,7 +218,7 @@ namespace{
                 }
 
                 handleHeapAlloc(M, &heapObjsNew);
-                //handleFree(M, &heapObjsFree);
+                handleFree(M, &heapObjsFree);
 
                 heapObjsFree.clear();
                 heapObjsNew.clear();                
@@ -428,18 +428,30 @@ namespace{
                 std::string functionName = call->getCalledFunction()->getName();
                 if(functionName.compare("__bitype_cast_verification") == 0){
                   update = true;
+                  //call->getCalledFunction()->getFunctionType()->dump();
                   Instruction *next = bitypeUtils->findNextInstruction(call);
                   IRBuilder<> Builder(next);
+                  LLVMContext& Ctx = M.getContext();
+                  PointerType* Int8PtrTy = PointerType::getUnqual(Type::getInt8Ty(Ctx));
+                  Type* VoidTy = Type::getVoidTy(Ctx);
+                  Type* Int32Ty = Type::getInt32Ty(Ctx);
 
-                  // check whether src addr is NULL
+
+                  // check whether sourcePtr is NULL
                   Value* isNotNull = Builder.CreateIsNotNull(call->getArgOperand(0));
                   Instruction *InsertPtMain = &*Builder.GetInsertPoint();
-                  TerminatorInst *ThenTermNotNull, *ElseTermNotNull;
-                  //SplitBlockAndInsertIfThenElse(isNotNull, InsertPtMain, &ThenTermNotNull,
-                  //                              &ElseTermNotNull, nullptr);
-                  ThenTermNotNull = SplitBlockAndInsertIfThen(isNotNull, InsertPtMain, false);
-                  // get the first level index
-                  Builder.SetInsertPoint(ThenTermNotNull);
+                  TerminatorInst *ThenTermNull, *ElseTermNull;
+                  //SplitBlockAndInsertIfThenElse(isNull, InsertPtMain, &ThenTermNull,
+                   //                             &ElseTermNull, nullptr);
+                  ThenTermNull = SplitBlockAndInsertIfThen(isNotNull, InsertPtMain, false);
+  
+                  // then branch, return nullptr
+                  // Value *nullpointer = ConstantPointerNull::get(Int8PtrTy);
+                  Builder.SetInsertPoint(ThenTermNull);
+                  //Builder.CreateRetVoid();
+
+                  // sourcePtr != NULL
+                  //Builder.SetInsertPoint(InsertPtMain);
                   Value *newPtr = Builder.CreatePtrToInt(call->getArgOperand(1), bitypeUtils->IntptrTyN);
                   Value *firstLeR = Builder.CreateLShr(newPtr, 26);
                   unsigned long l1_mask = (1UL << 22) - 1UL;
@@ -458,9 +470,11 @@ namespace{
                   TerminatorInst *ThenTerm, *ElseTerm;
                   //SplitBlockAndInsertIfThenElse(isNotNull2, InsertPt, &ThenTerm, &ElseTerm, nullptr);
                   ThenTerm = SplitBlockAndInsertIfThen(isNotNull2, InsertPt, false);
-                  // access the second level
+                  // then branch: level2 == NULL
                   Builder.SetInsertPoint(ThenTerm);
+                  //Builder.CreateRetVoid();
 
+                  //Builder.SetInsertPoint(InsertPt);
                   Value *secondLeR = Builder.CreateLShr(newPtr, 3);
                   unsigned long l2_mask = (1UL << 23) - 1UL;
                   Value *secondLeIndex = Builder.CreateAnd(secondLeR, l2_mask);
@@ -475,12 +489,18 @@ namespace{
                   TerminatorInst *ThenTerm2, *ElseTerm2;
                   ThenTerm2 = SplitBlockAndInsertIfThen(isNotNull3, InsertPt2, false);
 
-                  // get the safe code
+                  // if referenceAddr == NULL
                   Builder.SetInsertPoint(ThenTerm2);
+                  //Builder.CreateRetVoid();
 
-
+                  //Builder.SetInsertPoint(InsertPt2);
                   Value *indexValue = call->getArgOperand(2);
 
+                  //targetAddr type
+                  //llvm::errs() << "target's Type is : ";
+                  //targetAddr->getType()->dump();
+
+                  indexValue = Builder.CreateAdd(indexValue, ConstantInt::get(Int32Ty, 2));
                   Value *targetValue = Builder.CreateGEP(targetAddr, indexValue, "");
                   targetValue = Builder.CreateLoad(targetValue);
                   Value *tempCode = call->getArgOperand(3);
@@ -505,6 +525,12 @@ namespace{
                                                             bitypeUtils->VoidTy, bitypeUtils->Int32Ty);
                     
                   Builder.CreateCall(initFunction, param);
+                  //Builder.CreateRetVoid();
+                  Builder.SetInsertPoint(InsertPt3);
+                  Builder.SetInsertPoint(InsertPt2);
+                  Builder.SetInsertPoint(InsertPt);
+                  Builder.SetInsertPoint(InsertPtMain);
+                  //Builder.CreateRetVoid();
                   (&*i)->eraseFromParent();
                   break;
 

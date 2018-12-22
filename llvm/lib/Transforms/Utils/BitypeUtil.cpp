@@ -1284,7 +1284,6 @@ namespace llvm{
                 case CONOBJADD:{
                     if(ClInlineOpt && AllocType != REINTERPRET &&
                         AllocType != GLOBALALLOC){
-                            //get the first level index
                             GlobalVariable* GlookUpStart = getLookUpStart(*SrcM);
                             GlobalVariable *GlookUpSecondStart = getLookUpSecondLevelGlobal(*SrcM, "BitypeSecondLevelStart");
                             GlobalVariable *GlookUpSecondEnd = getLookUpSecondLevelGlobal(*SrcM, "BitypeSecondLevelEnd");
@@ -1296,7 +1295,10 @@ namespace llvm{
                             unsigned long l2_mask = (1UL << 23) - 1UL;
                             Value *idx22 = Builder.CreateLShr(NewAddr, 3);
                             Value *idx2 = Builder.CreateAnd(idx22, l2_mask);
+
                             idx2 = Builder.CreateShl(idx2, 1);
+                            Value* idx222 = Builder.CreateAdd(idx2, ConstantInt::get(Int64Ty, 1));
+
 
                             Value *bitypeLookupInit = Builder.CreateLoad(GlookUpStart);
                             Value *firstLevelValue1 = Builder.CreateGEP(bitypeLookupInit, idx1);
@@ -1325,6 +1327,7 @@ namespace llvm{
 
                             Builder.SetInsertPoint(InsertPt2);
                             
+                            bitypeLookupSecondStart = Builder.CreateLoad(GlookUpSecondStart);
                             Value *storedAddressed = Builder.CreateGEP(bitypeLookupInit, idx1);
                             Builder.CreateStore(bitypeLookupSecondStart, storedAddressed);
                             
@@ -1333,22 +1336,63 @@ namespace llvm{
                             // Value *idx2 = Builder.CreateLShr(addrInt, 3);
                             // idx2 = Builder.CreateAnd(idx2, l2_mask);
                             Value *storedAddr = Builder.CreateGEP(bitypeLookupSecondStart, idx2);
-                            Builder.CreateStore(currentGlobalVari, storedAddr);
+                            Value* currentGlobalVariTemp2 = Builder.CreatePointerCast(currentGlobalVari, Int8PtrTy);
+
+                            
+                            Builder.CreateStore(currentGlobalVariTemp2, storedAddr);
+
+                            Value* loadedAddr4 = Builder.CreateGEP(bitypeLookupSecondStart, idx222);
+                            Value* arrayOffset2 = Builder.CreateBitCast(loadedAddr4, PointerType::get((Type*)StructType::get(Int32Ty, Int32Ty), 0));
+                            
+                           
+                            //arrayOffset2->getType()->dump();
+                            //arrayOffset2 = Builder.CreateLoad(arrayOffset2);
+                            
+                            //llvm::errs() << "Hello?\n";
+                            std::vector<Value*> tempVec;
+                            tempVec.push_back((Value*)ConstantInt::get(Int32Ty, 0));
+                            tempVec.push_back((Value*)ConstantInt::get(Int32Ty, 0));
+                            
+                            ArrayRef<Value*> tempArr = ArrayRef<Value*>(tempVec);
+                            //arrayOffset2->getType()->dump();
+                            Value* size2 = Builder.CreateGEP(arrayOffset2, tempArr);
+                            //llvm::errs() << "Hello\n";
+                            //size2->getType()->dump();
+                            Builder.CreateStore(ConstantInt::get(Int32Ty, 1), size2);
+                            //llvm::errs() << "Hello End\n";
+
+                            tempVec.pop_back();
+                            tempVec.push_back((Value*)ConstantInt::get(Int32Ty, 1));
+                            ArrayRef<Value*> tempArr2 = ArrayRef<Value*>(tempVec);
+                            Value* offset2 = Builder.CreateGEP(arrayOffset2, tempArr2);
+                            Builder.CreateStore(OffsetV, offset2);
+                        
 
                             // // bitypeLookupSecondStart = bitypeLookupSecondStart + 1UL << 23
-                            unsigned long addedAddr = 1UL << 23;
+                            unsigned long addedAddr = 1UL << 24;
                             Value *addedAddrValue = ConstantInt::get(Int64Ty, addedAddr);
                             Value *loadedAddr = Builder.CreateGEP(bitypeLookupSecondStart, addedAddrValue);
-                            Value *bitypeSecondStart2 = Builder.CreateLoad(GlookUpSecondStart);
-                            Builder.CreateStore(loadedAddr, bitypeSecondStart2);
+                            //Value *bitypeSecondStart2 = Builder.CreateLoad(GlookUpSecondStart);
                             
-                            // level2[idx] = address
-                            //Builder.SetInsertPoint(InsertPt2);
-                            //llvm::errs() << "Hello, where it is\n";
-                            //Builder.SetInsertPoint(InsertPt);
+                            //loadedAddr->getType()->dump();
+                            //cast<PointerType>(GlookUpSecondStart->getType())->getElementType()->dump();
+                            Builder.CreateStore(loadedAddr, GlookUpSecondStart);
+
                             Builder.SetInsertPoint(ElseTerm);
                             Value* loadedAddr2 = Builder.CreateGEP(firstLevelValue, idx2);
-                            Builder.CreateStore(currentGlobalVari, loadedAddr2);
+                            Builder.CreateStore(currentGlobalVariTemp2, loadedAddr2);
+
+                            //size_offset* tmp_soff = (size_offset*)&(level2[idx22]);
+                            //tmp_soff->size = (uint32_t)ArraySize;
+                            //tmp_soff->offset = offset;
+                            //Value* idx222 = Builder.CreateAdd(idx2, ConstantInt::get(Int32Ty, 1));
+                            Value* loadedAddr3 = Builder.CreateGEP(firstLevelValue, idx222);
+                            
+                            Value* arrayOffset = Builder.CreateBitCast(loadedAddr3, PointerType::get((Type*)StructType::get(Int32Ty, Int32Ty), 0));
+                            Value* size = Builder.CreateGEP(arrayOffset, tempArr);
+                            Builder.CreateStore(ConstantInt::get(Int32Ty, 0), size);
+                            Value* offset = Builder.CreateGEP(arrayOffset, tempArr2);
+                            Builder.CreateStore(OffsetV, offset);
                             Builder.SetInsertPoint(InsertPt);
                             //llvm::errs() << "Hello, there ?\n";
                         }
@@ -1359,9 +1403,9 @@ namespace llvm{
                         else
                             funName += "__bitype_direct_updateObjTrace";
                         
-                        Value *Param[2] = {ObjAddrT, currentGlobalVari};
+                        Value *Param[3] = {ObjAddrT, currentGlobalVari, OffsetV};
                         Function *initFunction = (Function*)SrcM->getOrInsertFunction(funName, VoidTy,
-                                                IntptrTyN, IntptrTyN);
+                                                IntptrTyN, IntptrTyN, Int32Ty);
                         
                         Builder.CreateCall(initFunction, Param);
                         } //end else
@@ -1380,33 +1424,155 @@ namespace llvm{
                     break;
                 }
                 case VLAOBJADD:{
+                    
+                    //TODO Inline opt
+                    // if(ClInlineOpt){
 
-                    // TODO inline optimization
-                    // TODO add object delete of realloc
-                    if(AllocType == REALLOC){
-                        if(isFirstEntry){
-                    //__bitype_eraseObj(void *thisPtr, void *objAddr, const uint32_t TypeSize, unsigned long ArraySize, const uint32_t AllocType){
-                            Value *third = Builder.CreatePtrToInt(ReallocAddr, IntptrTyN);
-                            Value *ObjAddrR = Builder.CreateIntToPtr(Builder.CreateAdd(first, third), IntptrTyN);
-                            Function *initFunction = (Function *)SrcM->getOrInsertFunction("__bitype_eraseObj", VoidTy, IntptrTyN, IntptrTyN, Int32Ty,
-                                                                                            Int64Ty, Int32Ty);
-                            //Value *arraySizeAddr = Builder.CreateIntToPtr(Builder.CreateSub(third, Constant8), IntptrTyN);
-                            Value *Param[5] = {ObjAddrR, ReallocAddr, TypeSize, ArraySize, AllocTypeV};
-                            Builder.CreateCall(initFunction, Param);
+                    //         GlobalVariable* GlookUpStart = getLookUpStart(*SrcM);
+                    //         GlobalVariable *GlookUpSecondStart = getLookUpSecondLevelGlobal(*SrcM, "BitypeSecondLevelStart");
+                    //         GlobalVariable *GlookUpSecondEnd = getLookUpSecondLevelGlobal(*SrcM, "BitypeSecondLevelEnd");
+                    //         //Value *addrInt = Builder.CreatePtrToInt(ObjAddrT, IntptrTyN);
+                    //         //llvm::errs() << "Hello, get in\n";
 
-                            Function *eraseSizeFunction = (Function *)SrcM->getOrInsertFunction("__bitype_direct_eraseArraySize", VoidTy, IntptrTyN);
-                            Value *ParamErase[1] = {ReallocAddr};
-                            Builder.CreateCall(eraseSizeFunction, ParamErase);
+                    //         Value* index_i = Builder.CreateAlloca(Int64Ty);
+                    //         Builder.CreateStore(ConstantInt::get(Int64Ty, 0), index_i);
 
-                        }
-                    }
+                    //         BasicBlock* curBB = &*Builder.GetInsertBlock();
+                    //         Instruction* curInst = &*Builder.GetInsertPoint(); 
+                    //         BasicBlock* condationBlock = SplitBlock(curBB, curInst);
 
-                    //update array size in the shadow memory
+                    //         Builder.SetInsertPoint(curInst);
+                    //         Value* temp_index_i = Builder.CreateLoad(index_i);
+                    //         Value* forCon = Builder.CreateICmpULT(temp_index_i, ArraySize);
+                    //         TerminatorInst* thenTermMain;
 
+                    //         Instruction* mainPt = &*Builder.GetInsertPoint();
+                    //         thenTermMain = SplitBlockAndInsertIfThen(forCon, mainPt, false);
+
+                    //         Builder.SetInsertPoint(thenTermMain);
+
+                    //         temp_index_i = Builder.CreateLoad(index_i);
+                    //         Value *tempVal = Builder.CreateMul(TypeSize, temp_index_i);
+                    //         temp_index_i = Builder.CreateAdd(temp_index_i, ConstantInt::get(Int64Ty, 1));
+                    //         Builder.CreateStore(temp_index_i, index_i);
+                    //         Value *curAddr = Builder.CreateAdd(NewAddr, tempVal);
+
+                    //         Value *idx11 = Builder.CreateLShr(curAddr, 26);
+                    //         unsigned long l1_mask = (1UL << 22) - 1UL;
+                    //         Value *idx1 = Builder.CreateAnd(idx11, l1_mask);
+                    //         unsigned long l2_mask = (1UL << 23) - 1UL;
+                    //         Value *idx22 = Builder.CreateLShr(curAddr, 3);
+                    //         Value *idx2 = Builder.CreateAnd(idx22, l2_mask);
+
+                    //         idx2 = Builder.CreateShl(idx2, 1);
+                    //         Value* idx222 = Builder.CreateAdd(idx2, ConstantInt::get(Int64Ty, 1));
+
+
+                    //         Value *bitypeLookupInit = Builder.CreateLoad(GlookUpStart);
+                    //         Value *firstLevelValue1 = Builder.CreateGEP(bitypeLookupInit, idx1);
+                    //         Value *firstLevelValue = Builder.CreateLoad(firstLevelValue1);
+
+                    //         //if the term is null
+                    //         Value *isNull = Builder.CreateIsNull(firstLevelValue);
+                    //         Instruction *InsertPt = &*Builder.GetInsertPoint();
+                    //         TerminatorInst *ThenTerm, *ElseTerm;
+                    //         SplitBlockAndInsertIfThenElse(isNull, InsertPt, 
+                    //                                     &ThenTerm, &ElseTerm, nullptr);
+                    //         Builder.SetInsertPoint(ThenTerm);
+                    //         Value *bitypeLookupSecondStart = Builder.CreateLoad(GlookUpSecondStart);
+                    //         Value *bitypeLookupSecondEnd = Builder.CreateLoad(GlookUpSecondEnd);
+                            
+                    //         // // if the BitypeSecondLevelStart >= BitypeSecondLevelEnd
+                    //         Value *bitypeSecondGE = Builder.CreateICmpUGE(bitypeLookupSecondStart, bitypeLookupSecondEnd);
+                    //         Instruction *InsertPt2 = &*Builder.GetInsertPoint();
+                    //         TerminatorInst *ThenTerm2;
+                    //         ThenTerm2 = SplitBlockAndInsertIfThen(bitypeSecondGE, InsertPt2, false);
+                    //         Builder.SetInsertPoint(ThenTerm2);
+                            
+                    //         Function *initFunction = (Function*)SrcM->getOrInsertFunction("__bitype_malloc_new_space", 
+                    //                                         VoidTy);
+                    //         Builder.CreateCall(initFunction);
+
+                    //         Builder.SetInsertPoint(InsertPt2);
+                            
+                    //         bitypeLookupSecondStart = Builder.CreateLoad(GlookUpSecondStart);
+                    //         Value *storedAddressed = Builder.CreateGEP(bitypeLookupInit, idx1);
+                    //         Builder.CreateStore(bitypeLookupSecondStart, storedAddressed);
+                            
+                    //         // // level2[idx2] = address
+                    //         // unsigned long l2_mask = (1UL << 23) - 1UL;
+                    //         // Value *idx2 = Builder.CreateLShr(addrInt, 3);
+                    //         // idx2 = Builder.CreateAnd(idx2, l2_mask);
+                    //         Value *storedAddr = Builder.CreateGEP(bitypeLookupSecondStart, idx2);
+                    //         Value* currentGlobalVariTemp2 = Builder.CreatePointerCast(currentGlobalVari, Int8PtrTy);
+
+                            
+                    //         Builder.CreateStore(currentGlobalVariTemp2, storedAddr);
+
+                    //         Value* loadedAddr4 = Builder.CreateGEP(bitypeLookupSecondStart, idx222);
+                    //         Value* arrayOffset2 = Builder.CreateBitCast(loadedAddr4, PointerType::get((Type*)StructType::get(Int32Ty, Int32Ty), 0));
+                            
+                           
+                    //         //arrayOffset2->getType()->dump();
+                    //         //arrayOffset2 = Builder.CreateLoad(arrayOffset2);
+                            
+                    //         //llvm::errs() << "Hello?\n";
+                    //         std::vector<Value*> tempVec;
+                    //         tempVec.push_back((Value*)ConstantInt::get(Int32Ty, 0));
+                    //         tempVec.push_back((Value*)ConstantInt::get(Int32Ty, 0));
+                            
+                    //         ArrayRef<Value*> tempArr = ArrayRef<Value*>(tempVec);
+                    //         //arrayOffset2->getType()->dump();
+                    //         Value* size2 = Builder.CreateGEP(arrayOffset2, tempArr);
+                    //         //llvm::errs() << "Hello\n";
+                    //         //size2->getType()->dump();
+                    //         Builder.CreateStore(ConstantInt::get(Int32Ty, 1), size2);
+                    //         //llvm::errs() << "Hello End\n";
+
+                    //         tempVec.pop_back();
+                    //         tempVec.push_back((Value*)ConstantInt::get(Int32Ty, 1));
+                    //         ArrayRef<Value*> tempArr2 = ArrayRef<Value*>(tempVec);
+                    //         Value* offset2 = Builder.CreateGEP(arrayOffset2, tempArr2);
+                    //         Builder.CreateStore(OffsetV, offset2);
+                        
+
+                    //         // // bitypeLookupSecondStart = bitypeLookupSecondStart + 1UL << 23
+                    //         unsigned long addedAddr = 1UL << 24;
+                    //         Value *addedAddrValue = ConstantInt::get(Int64Ty, addedAddr);
+                    //         Value *loadedAddr = Builder.CreateGEP(bitypeLookupSecondStart, addedAddrValue);
+                    //         //Value *bitypeSecondStart2 = Builder.CreateLoad(GlookUpSecondStart);
+                            
+                    //         //loadedAddr->getType()->dump();
+                    //         //cast<PointerType>(GlookUpSecondStart->getType())->getElementType()->dump();
+                    //         Builder.CreateStore(loadedAddr, GlookUpSecondStart);
+
+                    //         Builder.SetInsertPoint(ElseTerm);
+                    //         Value* loadedAddr2 = Builder.CreateGEP(firstLevelValue, idx2);
+                    //         Builder.CreateStore(currentGlobalVariTemp2, loadedAddr2);
+
+                    //         //size_offset* tmp_soff = (size_offset*)&(level2[idx22]);
+                    //         //tmp_soff->size = (uint32_t)ArraySize;
+                    //         //tmp_soff->offset = offset;
+                    //         //Value* idx222 = Builder.CreateAdd(idx2, ConstantInt::get(Int32Ty, 1));
+                    //         Value* loadedAddr3 = Builder.CreateGEP(firstLevelValue, idx222);
+                            
+                    //         Value* arrayOffset = Builder.CreateBitCast(loadedAddr3, PointerType::get((Type*)StructType::get(Int32Ty, Int32Ty), 0));
+                    //         Value* size = Builder.CreateGEP(arrayOffset, tempArr);
+                    //         Builder.CreateStore(ConstantInt::get(Int32Ty, 0), size);
+                    //         Value* offset = Builder.CreateGEP(arrayOffset, tempArr2);
+                    //         Builder.CreateStore(OffsetV, offset);
+                    //         Builder.SetInsertPoint(InsertPt);
+                            
+                    //         Builder.CreateBr(condationBlock);
+
+                    //         Builder.SetInsertPoint(mainPt); 
+                               
+                    // }else{
                     Function *initFunction = (Function*)SrcM->getOrInsertFunction("__bitype_updateObjTrace", 
-                    VoidTy, IntptrTyN, IntptrTyN, Int32Ty, Int32Ty);
-                    Value *Param[4] = {ObjAddrT, currentGlobalVari, TypeSize, ArraySize};
+                    VoidTy, IntptrTyN, IntptrTyN, Int32Ty, Int32Ty, Int32Ty);
+                    Value *Param[5] = {ObjAddrT, currentGlobalVari, TypeSize, ArraySize, OffsetV};
                     Builder.CreateCall(initFunction, Param);
+                    // }
 
                     if(isFirstEntry){
                         //Value *arraySizeAddr = Builder.CreateIntToPtr(Builder.CreateSub(second, Constant8), IntptrTyN);
@@ -1432,8 +1598,6 @@ namespace llvm{
 
                     if(ClInlineOpt){
                         GlobalVariable* GlookUpStart = getLookUpStart(*SrcM);
-                        //GlobalVariable *GlookUpSecondStart = getLookUpSecondLevelGlobal(*SrcM, "BitypeSecondLevelStart");
-                        //GlobalVariable *GlookUpSecondEnd = getLookUpSecondLevelGlobal(*SrcM, "BitypeSecondLevelEnd");
                         Value *idx11 = Builder.CreateLShr(NewAddr, 26);
                         unsigned long l1_mask = (1UL << 22) - 1UL;
                         Value *idx1 = Builder.CreateAnd(idx11, l1_mask);
@@ -1444,9 +1608,24 @@ namespace llvm{
                         Value *bitypeLookupInit = Builder.CreateLoad(GlookUpStart);
                         Value *firstLevelValue1 = Builder.CreateGEP(bitypeLookupInit, idx1);
                         Value *firstLevelValue = Builder.CreateLoad(firstLevelValue1);
+
+                        Value* isnotNull = Builder.CreateIsNotNull(firstLevelValue);
+
+                        Instruction* InsertPt = &*Builder.GetInsertPoint();
+                        TerminatorInst *ThenTerm;
+                        ThenTerm = SplitBlockAndInsertIfThen(isnotNull, InsertPt, false);
+                        Builder.SetInsertPoint(ThenTerm);
+                        //Then Branch
                         Value *nullpointer = ConstantPointerNull::get((PointerType*)Int8PtrTy);
+
                         Value *gepvalue = Builder.CreateGEP(firstLevelValue, idx2);
                         Builder.CreateStore(nullpointer, gepvalue);
+                        Value *size_offset = Builder.CreateGEP(firstLevelValue, 
+                                                                Builder.CreateAdd(idx2, ConstantInt::get(Int64Ty, 1)));
+                        Builder.CreateStore(nullpointer, size_offset);
+                        // end Then branch
+                        
+                        Builder.SetInsertPoint(InsertPt);
                     }
                     else{
                     Function *initFunction = (Function *)SrcM->getOrInsertFunction("__bitype_direct_eraseObj", VoidTy, IntptrTyN);
