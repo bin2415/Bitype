@@ -16,7 +16,7 @@ cd builddir
 ### build it
 
 ```
-cmake DCMAKE_BUILD_TYPE=Release path/to/llvm/source/root
+cmake -DCMAKE_BUILD_TYPE=Release path/to/llvm/source/root
 make -j$(nproc)
 ```
 
