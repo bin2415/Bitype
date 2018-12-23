@@ -2,7 +2,7 @@
 
 "Mapping to Bits: Efficiently Detecting Type Confusion Errors" is presented in ACSAC 2018.
 
-## Still have environment problem, fixing!!
+<!-- ## Still have environment problem, fixing!! -->
 
 ## Build
 

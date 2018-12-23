@@ -12,7 +12,7 @@ using namespace std;
 
 #define BITYPE_ERROR -10
 #define BT_BUF_SIZE 100
-#define PRINT_BAD_CASTING
+//#define PRINT_BAD_CASTING
 
 typedef struct size_offset{
     uint32_t size;
